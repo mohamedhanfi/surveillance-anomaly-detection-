@@ -1,0 +1,1 @@
+The anomaly event 'RoadAccidents' involves a vehicle emitting a glowing light while stopped at a road marking. A car is observed traveling in the wrong direction on a road, contrary to the directional arrows. This dangerous maneuver is likely contributing to the increased risk of an accident, highlighting the detection of potential road safety violations.

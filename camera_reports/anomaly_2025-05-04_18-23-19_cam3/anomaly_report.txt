@@ -1,0 +1,1 @@
+In this anomaly event, a car is observed driving in reverse along a busy road, continuing in reverse down a street, and approaching an intersection. This hazardous maneuver was detected as a 'RoadAccidents' anomaly, highlighting a potential risk to road safety.
