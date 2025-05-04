@@ -47,12 +47,12 @@ The system is modular and adaptable, supporting both real-time and offline (batc
 Below is a sample output generated using OpenAI API based on a detected anomaly:
 
 ```text
-Anomaly Detected: Violence
+Anomaly Detected: Road Accident
 Location: Main Gate
 Timestamp: 2025-05-04T15:30:12
 Confidence: 92%
 
-Report: A violent event was detected near the main gate on May 4th at 3:30 PM with high confidence. Immediate review is recommended to ensure public safety.
+Report: A road accident was detected near the main gate on May 4th at 3:30 PM with high confidence. Immediate review is recommended to ensure public safety.
 ```
 
 ---
