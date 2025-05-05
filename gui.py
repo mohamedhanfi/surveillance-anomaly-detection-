@@ -54,6 +54,7 @@ class VideoViT(torch.nn.Module):
         pooled = temporal_features.mean(dim=1)
         return self.classifier(pooled)
 
+
 class SmartMonitoringApp:
     def __init__(self, root):
         self.root = root
@@ -63,8 +64,9 @@ class SmartMonitoringApp:
         # Theme state
         self.current_theme = "dark"
 
-        # Background image path
+        # Background image paths
         self.bg_image_path = "assets/111.jpg"
+        self.bg_image_light_path = "assets/222.png"  
 
         # Report directory and database setup
         self.report_dir = "camera_reports"
@@ -74,7 +76,7 @@ class SmartMonitoringApp:
         self.users = self.db_manager.get_users()
 
         # OpenAI API key (replace with your actual key)
-        self.api_key = "replace with your actual key"
+        self.api_key = "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"
 
         # Log file for login records
         self.log_file_path = "monitoring.db"
@@ -142,7 +144,6 @@ class SmartMonitoringApp:
         self.report_tree.column("Confidence", width=100)
         self.report_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.report_tree.bind("<<TreeviewSelect>>", self.show_anomaly_details)
-
         scroll = ttk.Scrollbar(self.report_frame, orient="vertical", command=self.report_tree.yview)
         scroll.pack(side="right", fill="y")
         self.report_tree.configure(yscrollcommand=scroll.set)
@@ -150,7 +151,6 @@ class SmartMonitoringApp:
         # Admin UI
         self.operator_listbox = tk.Listbox(self.admin_frame, font=("Arial", 14))
         self.operator_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
         btn_frame = ttk.Frame(self.admin_frame)
         btn_frame.pack(pady=5)
         ttk.Button(btn_frame, text="Add Operator", command=self.add_operator).grid(row=0, column=0, padx=5)
@@ -158,7 +158,7 @@ class SmartMonitoringApp:
 
         # Mode toggle button
         self.mode_button = ttk.Button(self.root, text="Light Mode", command=self.toggle_theme)
-        self.mode_button.place(relx=0.98, rely=0.02, anchor="ne")
+        self.mode_button.place(relx=0.80, rely=0.97, anchor="se")
 
     def create_login_frame(self):
         self.login_frame = ttk.Frame(self.root, padding=20)
@@ -171,10 +171,6 @@ class SmartMonitoringApp:
         self.password_entry.grid(row=1, column=1, pady=5)
         ttk.Button(self.login_frame, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
 
-    def place_widgets(self):
-        # This method is no longer needed as create_login_frame handles placement
-        pass
-
     def apply_theme(self):
         if self.current_theme == "dark":
             bg_color = "black"
@@ -184,10 +180,17 @@ class SmartMonitoringApp:
             tree_bg = "black"
             tree_fg = "white"
             tree_sel = "#555"
-            self.bg_image = Image.open(self.bg_image_path).resize((self.root.winfo_screenwidth(), self.root.winfo_screenheight()))
-            self.bg_photo = ImageTk.PhotoImage(self.bg_image)
-            self.bg_label.config(image=self.bg_photo)
-            self.bg_label.place(relwidth=1, relheight=1)
+
+            try:
+                self.bg_image = Image.open(self.bg_image_path).resize(
+                    (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+                )
+                self.bg_photo = ImageTk.PhotoImage(self.bg_image)
+                self.bg_label.config(image=self.bg_photo)
+                self.bg_label.place(relwidth=1, relheight=1)
+            except Exception as e:
+                print(f"Error loading dark mode background: {e}")
+                self.bg_label.place_forget()
         else:
             bg_color = "white"
             fg_color = "black"
@@ -196,29 +199,41 @@ class SmartMonitoringApp:
             tree_bg = "white"
             tree_fg = "black"
             tree_sel = "#d9d9d9"
-            self.bg_label.place_forget()
 
+            try:
+                self.bg_image_light = Image.open(self.bg_image_light_path).resize(
+                    (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+                )
+                self.bg_photo_light = ImageTk.PhotoImage(self.bg_image_light)
+                self.bg_label.config(image=self.bg_photo_light)
+                self.bg_label.place(relwidth=1, relheight=1)
+            except Exception as e:
+                print(f"Error loading light mode background: {e}")
+                self.bg_label.place_forget()
+
+        # Apply styles
         self.style.configure("TFrame", background=bg_color)
         self.style.configure("TLabel", background=bg_color, foreground=fg_color)
         self.style.configure("TEntry", fieldbackground=bg_color, foreground=fg_color)
-        self.style.configure("TButton", 
-                            background=btn_bg, 
-                            foreground=fg_color, 
-                            bordercolor=btn_bg, 
-                            lightcolor=btn_bg, 
+        self.style.configure("TButton",
+                            background=btn_bg,
+                            foreground=fg_color,
+                            bordercolor=btn_bg,
+                            lightcolor=btn_bg,
                             darkcolor=btn_bg)
         self.style.map("TButton", background=[('active', btn_active)])
-        self.style.configure("Treeview", 
-                            background=tree_bg, 
-                            foreground=tree_fg, 
-                            fieldbackground=tree_bg, 
+        self.style.configure("Treeview",
+                            background=tree_bg,
+                            foreground=tree_fg,
+                            fieldbackground=tree_bg,
                             rowheight=30)
-        self.style.configure("Treeview.Heading", 
-                            background=tree_bg, 
-                            foreground=fg_color, 
+        self.style.configure("Treeview.Heading",
+                            background=tree_bg,
+                            foreground=fg_color,
                             relief="flat")
         self.style.map("Treeview", background=[('selected', tree_sel)])
         self.root.configure(bg=bg_color)
+
         for widget in [self.operator_listbox, self.report_tree]:
             if isinstance(widget, tk.Listbox):
                 widget.config(bg=bg_color, fg=fg_color)
@@ -231,10 +246,8 @@ class SmartMonitoringApp:
     def login(self):
         email = self.email_entry.get().strip()
         pwd = self.password_entry.get().strip()
-
         if hasattr(self, 'login_warning_label'):
             self.login_warning_label.destroy()
-
         user = self.users.get(email)
         if user and user['password'] == pwd:
             with open(self.log_file_path, "a") as log_file:
@@ -259,7 +272,7 @@ class SmartMonitoringApp:
         self._create_camera_grid()
         self.stop_events = [threading.Event() for _ in range(self.num_cameras)]
         self._start_video_threads()
-        self.back_button.place(relx=0.02, rely=0.02, anchor="nw")
+        self.back_button.place(relx=0.90, rely=0.97, anchor="se")
         self.current_left_frame = self.main_frame
 
     def show_admin_interface(self):
@@ -269,7 +282,7 @@ class SmartMonitoringApp:
         for email, info in self.users.items():
             if info['role'] == 'operator':
                 self.operator_listbox.insert(tk.END, f"{info['name']} <{email}>")
-        self.back_button.place(relx=0.02, rely=0.02, anchor="nw")
+        self.back_button.place(relx=0.90, rely=0.97, anchor="se")
         self.current_left_frame = self.admin_frame
 
     def go_back(self):
@@ -330,25 +343,15 @@ class SmartMonitoringApp:
         folder_name = f"anomaly_{ts}_cam{idx+1}"
         folder_path = os.path.join(self.report_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
-        
-        # Save frames
         for i, frame in enumerate(frames):
             frame_path = os.path.join(folder_path, f"frame_{i:03d}.jpg")
             frame.save(frame_path)
-        
-        # Save predicted class
         with open(os.path.join(folder_path, "predicted_class.txt"), "w") as f:
             f.write(cls)
-        
-        # Generate report
         summary, frame_data = generate_report(folder_path, self.api_key)
-        
-        # Insert into database
         anomaly_id = self.db_manager.insert_anomaly(ts, cls, f"Cam {idx+1}", conf, summary)
         for path, caption in frame_data:
             self.db_manager.insert_snapshot(anomaly_id, path, caption)
-        
-        # Update report tree
         self.report_tree.insert("", "end", iid=anomaly_id, values=(ts, cls, f"Cam {idx+1}", f"{conf:.2%}"))
 
     def show_anomaly_details(self, event):
@@ -362,7 +365,7 @@ class SmartMonitoringApp:
             details_win = tk.Toplevel(self.root)
             details_win.title("Anomaly Details")
             details_win.geometry("800x600")
-            info_text = f"Timestamp: {anomaly[1]}\nEvent: {anomaly[2]}\nCam Num: {anomaly[3]}\nConfidence: {anomaly[4]:.2%}\n\nReport:\n{anomaly[5]}"
+            info_text = f"Timestamp: {anomaly[1]}\nEvent: {anomaly[2]}\nCam Num: {anomaly[3]}\nConfidence: {anomaly[4]:.2%}\nReport:\n{anomaly[5]}"
             tk.Label(details_win, text=info_text, justify="left").pack(pady=10)
             for path, caption in snapshots:
                 img = Image.open(path)
@@ -381,45 +384,34 @@ class SmartMonitoringApp:
         win.grab_set()
         frm = ttk.Frame(win, padding=20, style="TFrame")
         frm.pack(fill=tk.BOTH, expand=True)
-
         ttk.Label(frm, text="Email:", style="TLabel").grid(row=0, column=0, sticky="e", pady=5)
         emE = ttk.Entry(frm, font=("Arial", 12))
         emE.grid(row=0, column=1, pady=5)
-
         email_warn = tk.Label(frm, text="", bg="#2e2e2e", fg="orange", font=("Arial", 10))
         email_warn.grid(row=1, column=1, sticky="w")
-
         ttk.Label(frm, text="Name:", style="TLabel").grid(row=2, column=0, sticky="e", pady=5)
         nmE = ttk.Entry(frm, font=("Arial", 12))
         nmE.grid(row=2, column=1, pady=5)
-
         name_warn = tk.Label(frm, text="", bg="#2e2e2e", fg="orange", font=("Arial", 10))
         name_warn.grid(row=3, column=1, sticky="w")
-
         ttk.Label(frm, text="Password:", style="TLabel").grid(row=4, column=0, sticky="e", pady=5)
         pwE = ttk.Entry(frm, show="*", font=("Arial", 12))
         pwE.grid(row=4, column=1, pady=5)
-
         pw_warn = tk.Label(frm, text="", bg="#2e2e2e", fg="orange", font=("Arial", 10))
         pw_warn.grid(row=5, column=1, sticky="w")
-
         ttk.Label(frm, text="Confirm Password:", style="TLabel").grid(row=6, column=0, sticky="e", pady=5)
         cpE = ttk.Entry(frm, show="*", font=("Arial", 12))
         cpE.grid(row=6, column=1, pady=5)
-
         cp_warn = tk.Label(frm, text="", bg="#2e2e2e", fg="orange", font=("Arial", 10))
         cp_warn.grid(row=7, column=1, sticky="w")
-
         def disable_paste(event): return "break"
         cpE.bind("<Control-v>", disable_paste)
         cpE.bind("<Control-V>", disable_paste)
         cpE.bind("<Shift-Insert>", disable_paste)
         cpE.bind("<<Paste>>", disable_paste)
         cpE.bind("<Button-3>", disable_paste)
-
         btn_frame = ttk.Frame(frm, style="TFrame")
         btn_frame.grid(row=8, column=0, columnspan=2, pady=(15, 0))
-
         def validate_fields():
             valid = True
             for w in [email_warn, name_warn, pw_warn, cp_warn]: w.config(text="")
@@ -440,7 +432,6 @@ class SmartMonitoringApp:
                 email_warn.config(text="Email already registered.")
                 valid = False
             return valid
-
         def save():
             if validate_fields():
                 e, n, p = emE.get().strip(), nmE.get().strip(), pwE.get()
@@ -448,7 +439,6 @@ class SmartMonitoringApp:
                 self.users = self.db_manager.get_users()
                 self.operator_listbox.insert(tk.END, f"{n} <{e}>")
                 win.destroy()
-
         ttk.Button(btn_frame, text="Add", command=save).grid(row=0, column=0, padx=5)
         ttk.Button(btn_frame, text="Cancel", command=win.destroy).grid(row=0, column=1, padx=5)
 
@@ -481,6 +471,7 @@ class SmartMonitoringApp:
                     pass
         if hasattr(self, 'db_manager'):
             self.db_manager.close()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
