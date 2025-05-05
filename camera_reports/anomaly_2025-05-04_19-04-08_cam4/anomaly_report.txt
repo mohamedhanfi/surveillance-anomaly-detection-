@@ -1,1 +1,0 @@
-The anomaly event involves a confrontation at a bar where two people are seen in an altercation near the bar counter. Concurrently, two men are engaged in a discussion outside, potentially near a car or entrance. The detected anomaly class for this event is 'Arson'.

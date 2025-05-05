@@ -1,1 +1,0 @@
-The anomaly event involves two individuals interacting near a vehicle at night, with their activity undetermined from the images. The detected anomaly is classified as 'Arson,' indicating suspicious behavior potentially linked to the intentional setting of a fire.

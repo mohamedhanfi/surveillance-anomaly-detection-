@@ -66,7 +66,7 @@ class SmartMonitoringApp:
 
         # Background image paths
         self.bg_image_path = "assets/111.jpg"
-        self.bg_image_light_path = "assets/222.png"  
+        self.bg_image_light_path = "assets/222.png"  # 👈 NEW: Light mode background image path
 
         # Report directory and database setup
         self.report_dir = "camera_reports"
@@ -170,6 +170,10 @@ class SmartMonitoringApp:
         self.password_entry = ttk.Entry(self.login_frame, show="*", font=("Arial", 14))
         self.password_entry.grid(row=1, column=1, pady=5)
         ttk.Button(self.login_frame, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
+
+    def place_widgets(self):
+        # This method is no longer needed as create_login_frame handles placement
+        pass
 
     def apply_theme(self):
         if self.current_theme == "dark":
@@ -343,16 +347,33 @@ class SmartMonitoringApp:
         folder_name = f"anomaly_{ts}_cam{idx+1}"
         folder_path = os.path.join(self.report_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
-        for i, frame in enumerate(frames):
+
+        # Always save only 3 key frames: first, middle, and last
+        selected_indices = [0, len(frames) // 2, len(frames) - 1]
+        for i in selected_indices:
+            frame = frames[i]
             frame_path = os.path.join(folder_path, f"frame_{i:03d}.jpg")
             frame.save(frame_path)
+
+        # Save predicted class
         with open(os.path.join(folder_path, "predicted_class.txt"), "w") as f:
             f.write(cls)
+
+        # Generate report using the saved frames (3)
         summary, frame_data = generate_report(folder_path, self.api_key)
+
+        # Insert into database
         anomaly_id = self.db_manager.insert_anomaly(ts, cls, f"Cam {idx+1}", conf, summary)
+
+        # Insert individual snapshots with captions
         for path, caption in frame_data:
             self.db_manager.insert_snapshot(anomaly_id, path, caption)
-        self.report_tree.insert("", "end", iid=anomaly_id, values=(ts, cls, f"Cam {idx+1}", f"{conf:.2%}"))
+
+        # Update report treeview
+        self.report_tree.insert(
+            "", "end", iid=anomaly_id,
+            values=(ts, cls, f"Cam {idx+1}", f"{conf:.2%}")
+        )
 
     def show_anomaly_details(self, event):
         selected_item = self.report_tree.selection()
