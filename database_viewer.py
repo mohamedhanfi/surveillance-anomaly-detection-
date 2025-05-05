@@ -302,7 +302,10 @@ class SmartMonitoringApp:
                 
                 where_clause = ""
                 if search_term:
-                    where_clause = f"WHERE {' OR '.join([f'{col} LIKE \"%{search_term}%\"' for col in cols])}"
+                    # build a list of individual conditions, e.g. ["col1 LIKE '%foo%'", "col2 LIKE '%foo%'", …]
+                    patterns = [f"{col} LIKE '%{search_term}%'" for col in cols]
+                    # join them with OR
+                    where_clause = "WHERE " + " OR ".join(patterns)
 
                 cur.execute(f"SELECT COUNT(*) FROM {tbl} {where_clause}")
                 total_rows = cur.fetchone()[0]
