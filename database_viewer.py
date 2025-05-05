@@ -17,29 +17,31 @@ class SmartMonitoringApp:
         self.db_path = "camera_reports/monitoring.db"
         self.rows_per_page = 50
         self.current_page = 1
-
+        
         # Modern color palette
         self.theme_colors = {
             "light": {
-                "bg": "#F5F6F8",
-                "fg": "#2D3137",
-                "accent": "#3B82F6",
+                "bg": "#F9FAFC",
+                "fg": "#1A202C",
+                "accent": "#4FD1C5",  # Teal accent
                 "card": "#FFFFFF",
-                "border": "#E2E8F0",
-                "odd_row": "#F9FAFB",
-                "even_row": "#FFFFFF"
+                "border": "#CBD5E0",
+                "odd_row": "#F7FAFC",  # Light blue wash
+                "even_row": "#FFFFFF",
+                "header": "#EDF2F7"
             },
             "dark": {
-                "bg": "#1E1E2F",
-                "fg": "#E4E4E4",
-                "accent": "#6366F1",
-                "card": "#2A2A40",
-                "border": "#3B3B5A",
-                "odd_row": "#2D2D44",
-                "even_row": "#232338"
+                "bg": "#1A202C",
+                "fg": "#E2E8F0",
+                "accent": "#48BB78",  # Emerald green
+                "card": "#2D3748",
+                "border": "#4A5568",
+                "odd_row": "#2C3545",
+                "even_row": "#1F2737",
+                "header": "#2C3545"
             }
         }
-
+        
         self.current_theme = "light"
         self.style = ttk.Style()
         self._setup_modern_styles()
@@ -53,9 +55,9 @@ class SmartMonitoringApp:
         self._build_user_logins(ttk.Frame(notebook))
         self._build_stats_tab(ttk.Frame(notebook))
 
-        # Add tabs to notebook with icons
+        # Add tabs to notebook with emoji icons
         notebook.add(self.table_tab, text="📊 Table Viewer")
-        notebook.add(self.login_tab, text="👤 User Logins")
+        notebook.add(self.login_tab, text="🔐 User Logins")
         notebook.add(self.stats_tab, text="📈 Statistics")
 
         # Load initial data
@@ -71,21 +73,25 @@ class SmartMonitoringApp:
         """Configure modern UI styles for all widgets"""
         colors = self.theme_colors[self.current_theme]
 
+        # Main window background
         self.root.configure(bg=colors["bg"])
 
         # Notebook styling
         self.style.configure("Modern.TNotebook", background=colors["card"])
-        self.style.configure("Modern.TNotebook.Tab", padding=[15, 8], font=("Segoe UI", 10, "bold"),
-                            background=colors["card"], foreground=colors["fg"])
+        self.style.configure("Modern.TNotebook.Tab",
+                            padding=[15, 8],
+                            font=("Segoe UI", 10, "bold"),
+                            background=colors["card"],
+                            foreground=colors["fg"])
         self.style.map("Modern.TNotebook.Tab",
                       background=[("selected", colors["accent"]),
                                  ("active", self._lighten_color(colors["accent"], 0.1))],
                       foreground=[("selected", "#FFFFFF")])
 
-        # Button styling
+        # Button styling with hover effect
         self.style.configure("Modern.TButton",
                             font=("Segoe UI", 9, "bold"),
-                            padding=8,
+                            padding=10,
                             relief="flat",
                             borderwidth=0,
                             background=colors["accent"],
@@ -94,10 +100,10 @@ class SmartMonitoringApp:
                       background=[("pressed", self._darken_color(colors["accent"], 0.1)),
                                  ("active", self._lighten_color(colors["accent"], 0.1))])
 
-        # Entry styling
+        # Entry fields
         self.style.configure("Modern.TEntry",
-                            padding=6,
-                            fieldbackground=colors["card"],
+                            padding=8,
+                            fieldbackground=colors["header"],
                             bordercolor=colors["border"])
 
         # Label styling
@@ -109,18 +115,18 @@ class SmartMonitoringApp:
         # Frame styling
         self.style.configure("Modern.TFrame", background=colors["bg"])
 
-        # Treeview styling
+        # Treeview improvements
         self.style.configure("Modern.Treeview.Heading",
                             font=("Segoe UI", 10, "bold"),
-                            background=colors["card"],
+                            background=colors["header"],
                             foreground=colors["fg"],
                             relief="flat")
         self.style.configure("Modern.Treeview",
                             background=colors["card"],
                             fieldbackground=colors["bg"],
                             foreground=colors["fg"],
-                            rowheight=28,
-                            font=("Segoe UI", 9))
+                            rowheight=30,
+                            borderwidth=0)
         self.style.map("Modern.Treeview.Heading",
                       relief=[("pressed", "!disabled", "sunken"),
                              ("!pressed", "!disabled", "flat")])
@@ -204,7 +210,7 @@ class SmartMonitoringApp:
     def _build_user_logins(self, parent):
         self.login_tab = parent
         ttk.Label(parent, text="🔐 User Login Records", style="Modern.TLabel",
-                font=("Segoe UI", 14, "bold")).pack(pady=(10, 5))
+                 font=("Segoe UI", 14, "bold")).pack(pady=(10, 5))
 
         card = ttk.Frame(parent, style="Modern.TFrame")
         card.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -235,7 +241,8 @@ class SmartMonitoringApp:
         ctrl = ttk.Frame(parent, style="Modern.TFrame")
         ctrl.pack(fill="x", padx=10, pady=8)
 
-        ttk.Button(ctrl, text="⟳ Refresh", command=self.load_stats, style="Modern.TButton").pack(side="left", padx=5)
+        ttk.Button(ctrl, text="⟳ Refresh", command=self.load_stats,
+                  style="Modern.TButton").pack(side="left", padx=5)
         ttk.Label(ctrl, text="📅 Select Day (YYYY-MM-DD):", style="Modern.TLabel").pack(
             side="left", padx=(20, 0))
         self.day_var = tk.StringVar(value=datetime.today().strftime("%Y-%m-%d"))
@@ -283,27 +290,31 @@ class SmartMonitoringApp:
         tbl = self.table_var.get()
         if not tbl:
             return
+            
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.cursor()
                 offset = (self.current_page - 1) * self.rows_per_page
+                
+                # Get filtered count
                 search_term = self.search_var.get().lower()
                 cols = self.get_table_columns(tbl)
-
+                
                 where_clause = ""
                 if search_term:
                     where_clause = f"WHERE {' OR '.join([f'{col} LIKE \"%{search_term}%\"' for col in cols])}"
 
                 cur.execute(f"SELECT COUNT(*) FROM {tbl} {where_clause}")
                 total_rows = cur.fetchone()[0]
-
+                
                 cur.execute(f"SELECT * FROM {tbl} {where_clause} LIMIT {self.rows_per_page} OFFSET {offset}")
                 rows = cur.fetchall()
                 cols = [d[0] for d in cur.description]
+                
         except sqlite3.Error as e:
             messagebox.showerror("Error", f"Failed to load {tbl}: {e}")
             return
-
+        
         self.update_table_display(cols, rows)
         self.update_pagination_controls(total_rows)
         self.status_var.set(f"Showing {len(rows)} of {total_rows} rows from '{tbl}'")
@@ -320,11 +331,11 @@ class SmartMonitoringApp:
     def update_table_display(self, cols, rows):
         self.table_tree.delete(*self.table_tree.get_children())
         self.table_tree["columns"] = cols
-
+        
         for col in cols:
             self.table_tree.heading(col, text=col, command=lambda c=col: self.sort_column(c))
             self.table_tree.column(col, width=120, anchor="w")
-
+        
         for i, row in enumerate(rows):
             tag = "evenrow" if i % 2 == 0 else "oddrow"
             self.table_tree.insert("", "end", values=row, tags=(tag,))
@@ -352,8 +363,10 @@ class SmartMonitoringApp:
         self.load_table_page()
 
     def export_table(self):
-        filename = filedialog.asksaveasfilename(defaultextension=".csv",
-                                              filetypes=[("CSV files", "*.csv")])
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv")]
+        )
         if not filename:
             return
 
@@ -361,13 +374,15 @@ class SmartMonitoringApp:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.table_tree["columns"])
+                
                 for item in self.table_tree.get_children():
-                    if self.table_tree.parent(item) == '':
+                    if self.table_tree.parent(item) == '':  # Only visible rows
                         values = self.table_tree.item(item)['values']
                         writer.writerow([str(v) if v is not None else '' for v in values])
+            
             messagebox.showinfo("Success", "Table data exported successfully!")
         except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to export table data:\n{e}")
+            messagebox.showerror("Export Error", f"Failed to export data:\n{e}")
 
     def load_user_logins(self):
         try:
@@ -379,21 +394,23 @@ class SmartMonitoringApp:
         except sqlite3.Error as e:
             messagebox.showerror("Error", f"Failed to load login data: {e}")
             return
-
+        
         self.login_tree.delete(*self.login_tree.get_children())
         self.login_tree["columns"] = cols
-
+        
         for col in cols:
             self.login_tree.heading(col, text=col)
             self.login_tree.column(col, width=150, anchor="w")
-
+        
         for i, row in enumerate(rows):
             tag = "evenrow" if i % 2 == 0 else "oddrow"
             self.login_tree.insert("", "end", values=row, tags=(tag,))
 
     def export_logins(self):
-        filename = filedialog.asksaveasfilename(defaultextension=".csv",
-                                              filetypes=[("CSV files", "*.csv")])
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv")]
+        )
         if not filename:
             return
 
@@ -401,10 +418,12 @@ class SmartMonitoringApp:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.login_tree["columns"])
+                
                 for item in self.login_tree.get_children():
-                    if self.login_tree.parent(item) == '':
+                    if self.login_tree.parent(item) == '':  # Only visible rows
                         values = self.login_tree.item(item)['values']
                         writer.writerow([str(v) if v is not None else '' for v in values])
+            
             messagebox.showinfo("Success", "Login data exported successfully!")
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export login data:\n{e}")
@@ -429,12 +448,12 @@ class SmartMonitoringApp:
         months = sorted(monthly.keys())
         classes = sorted(set(c for m in monthly for c in monthly[m] if c != "_total"))
 
+        # Plot monthly per-class
         self.ax1.clear()
         for cls in classes:
             y = [monthly[m].get(cls, 0) for m in months]
             self.ax1.plot(months, y, label=cls)
-        self.ax1.set_title("Anomalies per Class by Month",
-                          color=self.theme_colors[self.current_theme]["fg"])
+        self.ax1.set_title("Anomalies per Class by Month", color=self.theme_colors[self.current_theme]["fg"])
         self.ax1.set_ylabel("Count")
         self.ax1.set_xticks(range(len(months)))
         self.ax1.set_xticklabels(months, rotation=45, ha="right")
@@ -442,18 +461,19 @@ class SmartMonitoringApp:
         self.fig1.tight_layout()
         self.canvas1.draw()
 
+        # Plot monthly totals
         self.ax2.clear()
         if months:
             tot = [monthly[m]["_total"] for m in months]
             self.ax2.plot(months, tot)
-        self.ax2.set_title("Total Events per Month",
-                          color=self.theme_colors[self.current_theme]["fg"])
+        self.ax2.set_title("Total Events per Month", color=self.theme_colors[self.current_theme]["fg"])
         self.ax2.set_ylabel("Count")
         self.ax2.set_xticks(range(len(months)))
         self.ax2.set_xticklabels(months, rotation=45, ha="right")
         self.fig2.tight_layout()
         self.canvas2.draw()
 
+        # Plot daily per-hour
         day = self.day_var.get().strip()
         hourly = {h: 0 for h in range(24)}
         for cls, ts in rows:
@@ -467,14 +487,14 @@ class SmartMonitoringApp:
         hours = list(range(24))
         counts = [hourly[h] for h in hours]
         self.ax3.plot(hours, counts)
-        self.ax3.set_title(f"Anomalies on {day} by Hour",
-                          color=self.theme_colors[self.current_theme]["fg"])
+        self.ax3.set_title(f"Anomalies on {day} by Hour", color=self.theme_colors[self.current_theme]["fg"])
         self.ax3.set_xlabel("Hour of Day")
         self.ax3.set_ylabel("Count")
         self.ax3.set_xticks(hours)
         self.fig3.tight_layout()
         self.canvas3.draw()
-
+        
+        # Update status
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.stats_status_var.set(f"Last refreshed: {now}")
 
