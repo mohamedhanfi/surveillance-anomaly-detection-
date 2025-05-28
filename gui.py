@@ -24,7 +24,7 @@ CLASS_MAPPING = {
     3: "Robbery",
     4: "Normal"
 }
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.9  # Updated to 0.9 for 90% confidence
 
 # Define the VideoViT model
 class VideoViT(torch.nn.Module):
@@ -66,7 +66,7 @@ class SmartMonitoringApp:
 
         # Background image paths
         self.bg_image_path = "assets/111.jpg"
-        self.bg_image_light_path = "assets/222.png"  # 👈 NEW: Light mode background image path
+        self.bg_image_light_path = "assets/222.png"
 
         # Report directory and database setup
         self.report_dir = "camera_reports"
@@ -172,7 +172,6 @@ class SmartMonitoringApp:
         ttk.Button(self.login_frame, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
 
     def place_widgets(self):
-        # This method is no longer needed as create_login_frame handles placement
         pass
 
     def apply_theme(self):
@@ -215,7 +214,6 @@ class SmartMonitoringApp:
                 print(f"Error loading light mode background: {e}")
                 self.bg_label.place_forget()
 
-        # Apply styles
         self.style.configure("TFrame", background=bg_color)
         self.style.configure("TLabel", background=bg_color, foreground=fg_color)
         self.style.configure("TEntry", fieldbackground=bg_color, foreground=fg_color)
@@ -344,36 +342,46 @@ class SmartMonitoringApp:
 
     def report_anomaly(self, idx, cls, conf, frames):
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        folder_name = f"anomaly_{ts}_cam{idx+1}"
-        folder_path = os.path.join(self.report_dir, folder_name)
-        os.makedirs(folder_path, exist_ok=True)
+        anomaly_id = self.db_manager.insert_anomaly(ts, cls, f"Cam {idx+1}", conf, "Processing report...")
+        
+        def update_gui():
+            self.report_tree.insert(
+                "", "end", iid=anomaly_id,
+                values=(ts, cls, f"Cam {idx+1}", f"{conf:.2%}")
+            )
+        
+        self.root.after(0, update_gui)
+        
+        def background_processing():
+            try:
+                folder_name = f"anomaly_{ts}_cam{idx+1}"
+                folder_path = os.path.join(self.report_dir, folder_name)
+                os.makedirs(folder_path, exist_ok=True)
 
-        # Always save only 3 key frames: first, middle, and last
-        selected_indices = [0, len(frames) // 2, len(frames) - 1]
-        for i in selected_indices:
-            frame = frames[i]
-            frame_path = os.path.join(folder_path, f"frame_{i:03d}.jpg")
-            frame.save(frame_path)
+                # Save the last three frames
+                selected_indices = [len(frames) - 3, len(frames) - 2, len(frames) - 1]
+                for i in selected_indices:
+                    frame = frames[i]
+                    frame_path = os.path.join(folder_path, f"frame_{i:03d}.jpg")
+                    frame.save(frame_path)
 
-        # Save predicted class
-        with open(os.path.join(folder_path, "predicted_class.txt"), "w") as f:
-            f.write(cls)
+                with open(os.path.join(folder_path, "predicted_class.txt"), "w") as f:
+                    f.write(cls)
 
-        # Generate report using the saved frames (3)
-        summary, frame_data = generate_report(folder_path, self.api_key)
-
-        # Insert into database
-        anomaly_id = self.db_manager.insert_anomaly(ts, cls, f"Cam {idx+1}", conf, summary)
-
-        # Insert individual snapshots with captions
-        for path, caption in frame_data:
-            self.db_manager.insert_snapshot(anomaly_id, path, caption)
-
-        # Update report treeview
-        self.report_tree.insert(
-            "", "end", iid=anomaly_id,
-            values=(ts, cls, f"Cam {idx+1}", f"{conf:.2%}")
-        )
+                summary, frame_data = generate_report(folder_path, self.api_key)
+                self.db_manager.update_anomaly_summary(anomaly_id, summary)
+                
+                for path, caption in frame_data:
+                    self.db_manager.insert_snapshot(anomaly_id, path, caption)
+                    
+            except Exception as e:
+                print(f"Error in background processing: {e}")
+                try:
+                    self.db_manager.update_anomaly_summary(anomaly_id, f"Report generation failed: {str(e)}")
+                except Exception as db_error:
+                    print(f"Database update error: {db_error}")
+        
+        threading.Thread(target=background_processing, daemon=True).start()
 
     def show_anomaly_details(self, event):
         selected_item = self.report_tree.selection()
@@ -389,13 +397,16 @@ class SmartMonitoringApp:
             info_text = f"Timestamp: {anomaly[1]}\nEvent: {anomaly[2]}\nCam Num: {anomaly[3]}\nConfidence: {anomaly[4]:.2%}\nReport:\n{anomaly[5]}"
             tk.Label(details_win, text=info_text, justify="left").pack(pady=10)
             for path, caption in snapshots:
-                img = Image.open(path)
-                img.thumbnail((200, 200))
-                photo = ImageTk.PhotoImage(img)
-                lbl = tk.Label(details_win, image=photo)
-                lbl.image = photo
-                lbl.pack()
-                tk.Label(details_win, text=caption).pack()
+                try:
+                    img = Image.open(path)
+                    img.thumbnail((200, 200))
+                    photo = ImageTk.PhotoImage(img)
+                    lbl = tk.Label(details_win, image=photo)
+                    lbl.image = photo
+                    lbl.pack()
+                    tk.Label(details_win, text=caption).pack()
+                except Exception as e:
+                    tk.Label(details_win, text=f"Error loading image: {path}").pack()
 
     def add_operator(self):
         win = tk.Toplevel(self.root)
