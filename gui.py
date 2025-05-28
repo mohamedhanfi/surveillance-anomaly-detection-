@@ -76,7 +76,7 @@ class SmartMonitoringApp:
         self.users = self.db_manager.get_users()
 
         # OpenAI API key (replace with your actual key)
-        self.api_key = "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"
+        self.api_key = "replace with your actual key"
 
         # Log file for login records
         self.log_file_path = "monitoring.db"
