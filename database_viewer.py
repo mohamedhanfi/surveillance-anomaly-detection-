@@ -156,12 +156,12 @@ class SmartMonitoringApp:
 
         ttk.Label(control_frame, text="🔍 Select Table:", style="Modern.TLabel").pack(side="left", padx=5)
         self.table_names = self._get_table_names()
-        self.table_var = tk.StringVar(value=self.table_names[0] if self.table_names else "")
+        self.table_var = tk.StringVar(value="User" if "User" in self.table_names else (self.table_names[0] if self.table_names else ""))
         self.table_combo = ttk.Combobox(control_frame, textvariable=self.table_var,
                                        values=self.table_names, state="readonly", width=25)
         self.table_combo.pack(side="left", padx=5)
         self.table_combo.bind("<<ComboboxSelected>>", lambda e: self.load_table_page())
-
+        
         ttk.Button(control_frame, text="⟳ Refresh", command=self.load_table_page,
                   style="Modern.TButton").pack(side="left", padx=5)
         ttk.Button(control_frame, text="📁 Export CSV", command=self.export_table,
@@ -389,11 +389,11 @@ class SmartMonitoringApp:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT * FROM login")
+                cur.execute("SELECT * FROM User")
                 rows = cur.fetchall()
                 cols = [d[0] for d in cur.description]
         except sqlite3.Error as e:
-            messagebox.showerror("Error", f"Failed to load login data: {e}")
+            messagebox.showerror("Error", f"Failed to load User data: {e}")
             return
         
         self.login_tree.delete(*self.login_tree.get_children())

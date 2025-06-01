@@ -13,7 +13,7 @@ class DatabaseManager:
     def init_database(self):
         with self.db_lock:
             self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS login (
+                CREATE TABLE IF NOT EXISTS User (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT,
                     username TEXT UNIQUE,
@@ -40,10 +40,10 @@ class DatabaseManager:
                     FOREIGN KEY (anomaly_id) REFERENCES Anomaly_status(id)
                 )
             ''')
-            self.cursor.execute("SELECT COUNT(*) FROM login WHERE role = 'admin'")
+            self.cursor.execute("SELECT COUNT(*) FROM User WHERE role = 'admin'")
             if self.cursor.fetchone()[0] == 0:
                 self.cursor.execute('''
-                    INSERT INTO login (email, username, password, role)
+                    INSERT INTO User (email, username, password, role)
                     VALUES ('admin@gmail.com', 'Admin', '123456789', 'admin')
                 ''')
             self.conn.commit()
@@ -78,22 +78,29 @@ class DatabaseManager:
 
     def get_users(self):
         with self.db_lock:
-            self.cursor.execute("SELECT email, username, password, role FROM login")
+            self.cursor.execute("SELECT email, username, password, role FROM User")
             users = self.cursor.fetchall()
             return {email: {'name': username, 'password': password, 'role': role} for email, username, password, role in users}
 
     def add_user(self, email, username, password, role):
         with self.db_lock:
-            self.cursor.execute('''
-                INSERT INTO login (email, username, password, role)
+            
+            self.cursor.execute(''' 
+                INSERT INTO User (email, username, password, role)
                 VALUES (?, ?, ?, ?)
             ''', (email, username, password, role))
             self.conn.commit()
 
     def delete_user(self, email):
         with self.db_lock:
-            self.cursor.execute("DELETE FROM login WHERE email = ?", (email,))
+            self.cursor.execute("DELETE FROM User WHERE email = ?", (email,))
             self.conn.commit()
+
+
 
     def close(self):
         self.conn.close()
+        
+        
+        
+        

@@ -468,6 +468,7 @@ class SmartMonitoringApp:
             if validate_fields():
                 e, n, p = emE.get().strip(), nmE.get().strip(), pwE.get()
                 self.db_manager.add_user(e, n, p, 'operator')
+                
                 self.users = self.db_manager.get_users()
                 self.operator_listbox.insert(tk.END, f"{n} <{e}>")
                 win.destroy()
