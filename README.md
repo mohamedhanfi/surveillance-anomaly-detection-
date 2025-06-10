@@ -56,7 +56,7 @@ Report: A road accident was detected near the main gate on May 4th at 3:30 PM wi
 ```
 
 ---
-Download Model wieghts(best_model.pth): https://www.kaggle.com/models/mohamedhanfi/anomaly-detection/
+💾 Download Model Weights (best_model.pth): https://www.kaggle.com/models/mohamedhanfi/anomaly-detection/
 ---
 
 ## 🤝 Contributing
