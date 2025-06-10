@@ -11,11 +11,16 @@ from transformers import ViTModel, ViTConfig, logging
 import os
 from reporting import generate_report
 from database import DatabaseManager
+import queue
 
-# Suppress unnecessary warnings
 logging.set_verbosity_error()
 
-# Constants
+# Configuration Variables
+BUFFER_SIZE = 16  # Number of frames in the buffer for inference
+INFERENCE_INTERVAL = 2 # Seconds between inference checks
+CONFIDENCE_THRESHOLD = 0.75  # Confidence level to report an anomaly
+REPORT_COOLDOWN = 120  # Seconds between reports for the same camera
+
 IMG_SIZE = 224
 CLASS_MAPPING = {
     0: "Arson",
@@ -24,9 +29,7 @@ CLASS_MAPPING = {
     3: "Robbery",
     4: "Normal"
 }
-CONFIDENCE_THRESHOLD = 0.9  # Updated to 0.9 for 90% confidence
 
-# Define the VideoViT model
 class VideoViT(torch.nn.Module):
     def __init__(self, num_classes=5):
         super().__init__()
@@ -61,36 +64,29 @@ class SmartMonitoringApp:
         self.root.title("Smart Monitoring & Anomaly Detection")
         self.root.state('zoomed')
 
-        # Theme state
         self.current_theme = "dark"
 
-        # Background image paths
         self.bg_image_path = "assets/111.jpg"
         self.bg_image_light_path = "assets/222.png"
 
-        # Report directory and database setup
         self.report_dir = "camera_reports"
         os.makedirs(self.report_dir, exist_ok=True)
         self.db_path = os.path.join(self.report_dir, "monitoring.db")
         self.db_manager = DatabaseManager(self.db_path)
         self.users = self.db_manager.get_users()
 
-        # OpenAI API key (replace with your actual key)
         self.api_key = "replace with your actual key"
 
-        # Log file for login records
         self.log_file_path = "monitoring.db"
 
-        # Initialize UI
         self.create_widgets()
         self.apply_theme()
 
-        # Video camera setup
-        self.num_cameras = 8
+        self.num_cameras = 6
         self.captures = [cv2.VideoCapture(f"videos/{i+1}.mp4") for i in range(self.num_cameras)]
         self.camera_labels = []
+        self.frame_queues = [queue.Queue(maxsize=1) for _ in range(self.num_cameras)]
 
-        # Model setup
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = VideoViT()
         try:
@@ -99,35 +95,38 @@ class SmartMonitoringApp:
             print("Warning: best_model.pth not found.")
         self.model.to(self.device)
         self.model.eval()
-        self.model_lock = threading.Lock()
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-        # Stop events for video threads
         self.stop_events = [threading.Event() for _ in range(self.num_cameras)]
+        self.last_inference_times = [0] * self.num_cameras
+        self.buffers = [[] for _ in range(self.num_cameras)]  # Each buffer will store (frame, timestamp) tuples
+        self.last_report_times = [None] * self.num_cameras
+        self.inference_queue = queue.Queue()
+        self.inference_running = True
 
-        # Back button
+        # Adjustable parameters
+        self.buffer_size = BUFFER_SIZE
+        self.inference_interval = INFERENCE_INTERVAL
+        self.confidence_threshold = CONFIDENCE_THRESHOLD
+        self.report_cooldown = REPORT_COOLDOWN
+
         self.back_button = ttk.Button(self.root, text="Go Back", command=self.go_back)
 
     def create_widgets(self):
-        # Background image label
         self.bg_label = tk.Label(self.root)
 
-        # Styling
         self.style = ttk.Style()
         self.style.theme_use('clam')
 
-        # Main frames
         self.main_frame = ttk.Frame(self.root)
         self.report_frame = ttk.Frame(self.root)
         self.admin_frame = ttk.Frame(self.root)
 
-        # Create login frame initially
         self.create_login_frame()
 
-        # Enhanced Report Treeview
         self.report_tree = ttk.Treeview(
             self.report_frame,
             columns=("Timestamp", "Event", "Cam Num", "Confidence"),
@@ -148,7 +147,6 @@ class SmartMonitoringApp:
         scroll.pack(side="right", fill="y")
         self.report_tree.configure(yscrollcommand=scroll.set)
 
-        # Admin UI
         self.operator_listbox = tk.Listbox(self.admin_frame, font=("Arial", 14))
         self.operator_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         btn_frame = ttk.Frame(self.admin_frame)
@@ -156,7 +154,6 @@ class SmartMonitoringApp:
         ttk.Button(btn_frame, text="Add Operator", command=self.add_operator).grid(row=0, column=0, padx=5)
         ttk.Button(btn_frame, text="Delete Operator", command=self.delete_operator).grid(row=0, column=1, padx=5)
 
-        # Mode toggle button
         self.mode_button = ttk.Button(self.root, text="Light Mode", command=self.toggle_theme)
         self.mode_button.place(relx=0.80, rely=0.97, anchor="se")
 
@@ -236,10 +233,6 @@ class SmartMonitoringApp:
         self.style.map("Treeview", background=[('selected', tree_sel)])
         self.root.configure(bg=bg_color)
 
-        for widget in [self.operator_listbox, self.report_tree]:
-            if isinstance(widget, tk.Listbox):
-                widget.config(bg=bg_color, fg=fg_color)
-
     def toggle_theme(self):
         self.current_theme = "light" if self.current_theme == "dark" else "dark"
         self.mode_button.config(text="Light Mode" if self.current_theme == "dark" else "Dark Mode")
@@ -274,6 +267,8 @@ class SmartMonitoringApp:
         self._create_camera_grid()
         self.stop_events = [threading.Event() for _ in range(self.num_cameras)]
         self._start_video_threads()
+        self._update_gui()
+        threading.Thread(target=self._inference_loop, daemon=True).start()
         self.back_button.place(relx=0.90, rely=0.97, anchor="se")
         self.current_left_frame = self.main_frame
 
@@ -288,6 +283,7 @@ class SmartMonitoringApp:
         self.current_left_frame = self.admin_frame
 
     def go_back(self):
+        self.inference_running = False
         self.current_left_frame.pack_forget()
         self.report_frame.pack_forget()
         self.back_button.place_forget()
@@ -313,7 +309,6 @@ class SmartMonitoringApp:
             threading.Thread(target=self._update_camera, args=(idx,), daemon=True).start()
 
     def _update_camera(self, idx):
-        buf = []
         while not self.stop_events[idx].is_set():
             ret, frame = self.captures[idx].read()
             if not ret:
@@ -321,28 +316,59 @@ class SmartMonitoringApp:
                 continue
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             resized = cv2.resize(rgb, (400, 300))
-            img = ImageTk.PhotoImage(Image.fromarray(resized))
-            self.camera_labels[idx].imgtk = img
-            self.camera_labels[idx].config(image=img)
-            buf.append(Image.fromarray(rgb).resize((IMG_SIZE, IMG_SIZE)))
-            if len(buf) == 16:
-                threading.Thread(target=self._infer, args=(buf, idx), daemon=True).start()
-                buf = []
+            pil_img = Image.fromarray(resized)
+            try:
+                self.frame_queues[idx].put_nowait(pil_img)
+            except queue.Full:
+                pass
+            current_time = time.time()
+            frame_pil = Image.fromarray(rgb).resize((IMG_SIZE, IMG_SIZE))
+            self.buffers[idx].append((frame_pil, current_time))
+            if len(self.buffers[idx]) > self.buffer_size:
+                self.buffers[idx].pop(0)
+            if current_time - self.last_inference_times[idx] >= self.inference_interval:
+                if len(self.buffers[idx]) == self.buffer_size:
+                    self.inference_queue.put((self.buffers[idx].copy(), idx))
+                    self.last_inference_times[idx] = current_time
             time.sleep(0.03)
 
-    def _infer(self, frames, idx):
-        t = torch.stack([self.transform(f) for f in frames]).unsqueeze(0).to(self.device)
-        with self.model_lock, torch.no_grad():
-            out = self.model(t)
-            probs = torch.nn.functional.softmax(out, dim=1)
-            conf, i = torch.max(probs, 1)
-        cls = CLASS_MAPPING[i.item()]
-        if cls != "Normal" and conf.item() > CONFIDENCE_THRESHOLD:
-            self.report_anomaly(idx, cls, conf.item(), frames)
+    def _update_gui(self):
+        for idx in range(self.num_cameras):
+            try:
+                pil_img = self.frame_queues[idx].get_nowait()
+                photo = ImageTk.PhotoImage(pil_img)
+                self.camera_labels[idx].config(image=photo)
+                self.camera_labels[idx].image = photo
+            except queue.Empty:
+                pass
+        self.root.after(30, self._update_gui)
 
-    def report_anomaly(self, idx, cls, conf, frames):
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    def _inference_loop(self):
+        while self.inference_running:
+            try:
+                frames_with_ts, idx = self.inference_queue.get(timeout=1)
+                frames = [f for f, ts in frames_with_ts]
+                timestamps = [ts for f, ts in frames_with_ts]
+                t = torch.stack([self.transform(f) for f in frames]).unsqueeze(0).to(self.device)
+                with torch.no_grad():
+                    out = self.model(t)
+                    probs = torch.nn.functional.softmax(out, dim=1)
+                    conf, i = torch.max(probs, 1)
+                cls = CLASS_MAPPING[i.item()]
+                if cls != "Normal" and conf.item() > self.confidence_threshold:
+                    current_time = time.time()
+                    if self.last_report_times[idx] is None or (current_time - self.last_report_times[idx]) >= self.report_cooldown:
+                        prediction_time = timestamps[-1]
+                        self.report_anomaly(idx, cls, conf.item(), frames, prediction_time)
+                        self.last_report_times[idx] = current_time
+                self.inference_queue.task_done()
+            except queue.Empty:
+                continue
+
+    def report_anomaly(self, idx, cls, conf, frames, prediction_time):
+        ts = datetime.fromtimestamp(prediction_time).strftime("%Y-%m-%d_%H-%M-%S")
         anomaly_id = self.db_manager.insert_anomaly(ts, cls, f"Cam {idx+1}", conf, "Processing report...")
+        print(f"Predicted anomaly at {ts} for Cam {idx+1}, Class: {cls}, Confidence: {conf:.2%}")
         
         def update_gui():
             self.report_tree.insert(
@@ -358,7 +384,6 @@ class SmartMonitoringApp:
                 folder_path = os.path.join(self.report_dir, folder_name)
                 os.makedirs(folder_path, exist_ok=True)
 
-                # Save the last three frames
                 selected_indices = [len(frames) - 3, len(frames) - 2, len(frames) - 1]
                 for i in selected_indices:
                     frame = frames[i]
@@ -495,6 +520,7 @@ class SmartMonitoringApp:
             self.operator_listbox.delete(sel)
 
     def __del__(self):
+        self.inference_running = False
         if hasattr(self, 'captures'):
             for cap in self.captures:
                 try:
@@ -504,7 +530,6 @@ class SmartMonitoringApp:
                     pass
         if hasattr(self, 'db_manager'):
             self.db_manager.close()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
