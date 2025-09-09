@@ -55,9 +55,7 @@ Confidence: 92%
 Report: A road accident was detected near the main gate on May 4th at 3:30 PM with high confidence. Immediate review is recommended to ensure public safety.
 ```
 
----
-💾 Download Model Weights (best_model.pth): https://www.kaggle.com/models/mohamedhanfi/anomaly-detection/
----
+
 
 ## 🤝 Contributing
 
